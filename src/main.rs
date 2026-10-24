@@ -3,9 +3,11 @@
 
 #[macro_use]
 mod macros;
+mod boot;
 mod is31fl3731;
 mod keymap;
 mod mcp23018;
+mod storage_layout;
 mod vial;
 
 use core::ptr;
@@ -25,13 +27,11 @@ use embassy_time::Instant;
 use embassy_time::Timer;
 use is31fl3731::Rgb;
 #[cfg(feature = "palettefx")]
-use is31fl3731::{LED_COUNT, VoyagerLayout};
+use is31fl3731::{LED_COUNT, MoonlanderLayout};
 use keymap::{COL, ROW};
-use mcp23018::{LED_PORTB, Mcp23018Matrix, SharedI2c};
+use mcp23018::{LED_PORTA, LED_PORTB, Mcp23018Matrix, SharedI2c};
 use panic_halt as _;
-use rmk::config::{
-    BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
-};
+use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, VialConfig};
 use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::event::{ActionEvent, EventSubscriber, LayerChangeEvent, SubscribableEvent};
@@ -93,38 +93,20 @@ bind_interrupts!(struct Irqs {
 const LEFT_ROWS: usize = 6;
 const LEFT_COLS: usize = 7;
 
-/// GD32F303 warm-boot cleanup for the ZSA Voyager.
-/// The ZSA bootloader jumps to firmware without resetting the NVIC,
-/// which can leave stale interrupts pending. Fix VTOR + clear all NVIC
-/// enables/pending before embassy-stm32 takes over.
-#[cortex_m_rt::pre_init]
-unsafe fn pre_init() {
-    unsafe {
-        ptr::write_volatile(0xE000_ED08 as *mut u32, 0x0800_2000);
-
-        core::arch::asm!("msr BASEPRI, {}", in(reg) 0u32);
-        core::arch::asm!("cpsie i");
-        core::arch::asm!("cpsie f");
-
-        for i in 0..8u32 {
-            ptr::write_volatile((0xE000_E180 + i * 4) as *mut u32, 0xFFFF_FFFF);
-            ptr::write_volatile((0xE000_E280 + i * 4) as *mut u32, 0xFFFF_FFFF);
-        }
-    }
-}
-
-/// Apply a 4-bit status-LED frame:
-///   bit 0 -> LED1 (PB5, direct GPIO, active high)
-///   bit 1 -> LED2 (PB4, direct GPIO, active high)
-///   bit 2 -> LED3 (MCP Port B bit 7, active low)
-///   bit 3 -> LED4 (MCP Port B bit 6, active low)
-fn apply_led_frame(led1: &mut Output<'static>, led2: &mut Output<'static>, bits: u8) {
-    led1.set_level(((bits & 0b0001) != 0).into());
-    led2.set_level(((bits & 0b0010) != 0).into());
-    let led3_on = (bits >> 2) & 1;
-    let led4_on = (bits >> 3) & 1;
-    let portb = ((led3_on ^ 1) << 7) | ((led4_on ^ 1) << 6);
+/// Six status LEDs: left PB5/PB4/PB3, right GPB7/GPB6/GPA7.
+/// GPIO indicators are active high; MCP indicators are active low.
+fn apply_led_frame(
+    led1: &mut Output<'static>,
+    led2: &mut Output<'static>,
+    led3: &mut Output<'static>,
+    bits: u8,
+) {
+    led1.set_level(((bits & 1) != 0).into());
+    led2.set_level(((bits & 2) != 0).into());
+    led3.set_level(((bits & 4) != 0).into());
+    let portb = (((bits >> 3) & 1) ^ 1) << 7 | (((bits >> 4) & 1) ^ 1) << 6;
     LED_PORTB.store(portb, Ordering::Relaxed);
+    LED_PORTA.store((((bits >> 5) & 1) ^ 1) << 7, Ordering::Relaxed);
 }
 
 /// Initial brightness. With palettefx this feeds `FrameParams::val`;
@@ -175,12 +157,12 @@ enum Effect {
 impl Effect {
     fn tick(&mut self, params: FrameParams<'_>, out: &mut [Hsv; LED_COUNT]) {
         match self {
-            Self::Gradient => gradient(&VoyagerLayout, params, out),
-            Self::Flow(s) => s.tick(&VoyagerLayout, params, out),
-            Self::Vortex(s) => s.tick(&VoyagerLayout, params, out),
-            Self::Sparkle(s) => s.tick(&VoyagerLayout, params, out),
-            Self::Ripple(s, rng) => s.tick_with_rng(rng, &VoyagerLayout, params, out),
-            Self::Reactive(s) => s.tick(&VoyagerLayout, params, out),
+            Self::Gradient => gradient(&MoonlanderLayout, params, out),
+            Self::Flow(s) => s.tick(&MoonlanderLayout, params, out),
+            Self::Vortex(s) => s.tick(&MoonlanderLayout, params, out),
+            Self::Sparkle(s) => s.tick(&MoonlanderLayout, params, out),
+            Self::Ripple(s, rng) => s.tick_with_rng(rng, &MoonlanderLayout, params, out),
+            Self::Reactive(s) => s.tick(&MoonlanderLayout, params, out),
         }
     }
 
@@ -214,7 +196,7 @@ impl Effect {
         let Self::Reactive(s) = self else {
             return false;
         };
-        let (x, y) = VoyagerLayout.position(led_idx);
+        let (x, y) = MoonlanderLayout.position(led_idx);
         s.record_hit(x, y, timer_ms);
         true
     }
@@ -256,16 +238,17 @@ fn tick_base_effect(
     rgb.paint_hsv(frame);
 }
 
-/// Drive the four status LEDs (4-bit binary counter of the highest
-/// active layer), animate the per-key RGB matrix when the base layer
+/// Show the highest active layer as a mirrored 3-bit value on the six
+/// status LEDs, animate the per-key RGB matrix when the base layer
 /// is active, and swap to a solid per-layer palette for other layers.
 ///
-/// Boot behavior: a 3x300 ms `BOOT_FRAMES` cascade, then an
+/// Boot behavior: a 6x300 ms indicator cascade, then an
 /// instant clear before the Flow animation takes over. Runs
 /// concurrently with matrix/USB setup, so it never delays boot.
 async fn layer_indicator(
     led1: &mut Output<'static>,
     led2: &mut Output<'static>,
+    led3: &mut Output<'static>,
     i2c: &SharedI2c,
 ) -> ! {
     use rmk::embassy_futures::select::{Either4, select4};
@@ -290,13 +273,13 @@ async fn layer_indicator(
     #[cfg(not(feature = "palettefx"))]
     let mut phase: u8 = 0;
 
-    const BOOT_FRAMES: [u8; 4] = [0b1001, 0b0110, 0b1111, 0b0000];
+    const BOOT_FRAMES: [u8; 7] = [1, 2, 4, 8, 16, 32, 0];
     let (last, lit_frames) = BOOT_FRAMES.split_last().unwrap();
     for &frame in lit_frames {
-        apply_led_frame(led1, led2, frame);
+        apply_led_frame(led1, led2, led3, frame);
         Timer::after_millis(300).await;
     }
-    apply_led_frame(led1, led2, *last);
+    apply_led_frame(led1, led2, led3, *last);
 
     let mut layer: u8 = 0;
     #[cfg(feature = "palettefx")]
@@ -352,7 +335,7 @@ async fn layer_indicator(
             }
             Either4::Second(event) => {
                 layer = event.0;
-                apply_led_frame(led1, led2, layer);
+                apply_led_frame(led1, led2, led3, (layer & 7) | ((layer & 7) << 3));
                 #[cfg(feature = "palettefx")]
                 if layer == 0 {
                     tick_base_effect(
@@ -376,6 +359,11 @@ async fn layer_indicator(
                 let _ = rgb.flush(&mut bus);
             }
             Either4::Third(event) => {
+                // User 0 is the board's ROM DFU action. RMK's built-in
+                // Bootloader action has no STM32 ROM backend in this version.
+                if event.action == Action::User(0) && !event.keyboard_event.pressed {
+                    boot::request_rom_dfu();
+                }
                 #[cfg(feature = "palettefx")]
                 {
                     let Action::Light(light) = event.action else {
@@ -456,19 +444,14 @@ async fn main(_spawner: Spawner) {
     }
     let p = embassy_stm32::init(config);
 
-    // Status LEDs: PB5 = layer bit 0, PB4 = layer bit 1. Held here so
+    // Status LEDs: PB5/PB4/PB3 = layer bits 0/1/2. Held here so
     // the layer_indicator future (joined below) can drive them.
     let mut led_bit0 = Output::new(p.PB5, Level::Low, Speed::Low);
     let mut led_bit1 = Output::new(p.PB4, Level::Low, Speed::Low);
+    let mut led_bit2 = Output::new(p.PB3, Level::Low, Speed::Low);
 
-    // Warm-boot disconnect: the ZSA bootloader leaves its USB peripheral
-    // active when jumping to firmware, so the host continues to see the
-    // bootloader's D+ pull-up. CNTR.PDWN=1 / APB1RSTR toggle do NOT
-    // release the pull-up on this hardware. What does work: gate the
-    // USB clock off and drive PA12 (D+) low as a regular GPIO. We hold
-    // that state all the way through storage init (see the matching
-    // restore just before Driver::new below); otherwise a slow
-    // clear_storage erase pushes SET_ADDRESS past the host's timeout.
+    // Hold USB disconnected until flash initialization is complete, including
+    // when returning from ROM DFU, so enumeration starts only when we are ready.
     unsafe {
         // RCC_APB1ENR = 0x4002_101C, USB clock gate = bit 23
         let apb1enr = 0x4002_101C as *mut u32;
@@ -486,16 +469,6 @@ async fn main(_spawner: Spawner) {
         ptr::write_volatile(odr, d & !(1 << 12));
     }
     Timer::after_millis(5).await;
-    // PA12 stays driven low as GPIO and the USB clock stays off until
-    // just before Driver::new below. Re-enabling the clock here would
-    // bring the internal pull-up back up (the bootloader leaves PDWN=0,
-    // so clocking alone is enough to reassert D+), starting the host's
-    // enumeration timer before storage init has completed. Holding the
-    // disconnect through storage init keeps SET_ADDRESS inside the
-    // host's window. The 5 ms here is only a settle for the detach;
-    // the hold that actually matters spans the MCP/I2C init and storage
-    // init that follow (full-speed detach needs >2.5us of SE0).
-
     // Deassert MCP23018 reset (PB8, active LOW) and let the chip settle
     // before the first I2C transaction. Reset recovery is microsecond
     // scale, so 2 ms is ample.
@@ -516,11 +489,11 @@ async fn main(_spawner: Spawner) {
     // unresponsive.
     {
         let mut bus = shared_i2c.lock().await;
-        let _ = is31fl3731::shutdown_chip(&mut bus, is31fl3731::ADDR_LEFT).await;
-        let _ = is31fl3731::shutdown_chip(&mut bus, is31fl3731::ADDR_RIGHT).await;
+        let _ = is31fl3731::shutdown_chip(&mut bus, is31fl3731::ADDR_LEFT);
+        let _ = is31fl3731::shutdown_chip(&mut bus, is31fl3731::ADDR_RIGHT);
         Timer::after_millis(10).await;
-        let _ = is31fl3731::configure_chip(&mut bus, is31fl3731::ADDR_LEFT).await;
-        let _ = is31fl3731::configure_chip(&mut bus, is31fl3731::ADDR_RIGHT).await;
+        let _ = is31fl3731::configure_chip(&mut bus, is31fl3731::ADDR_LEFT);
+        let _ = is31fl3731::configure_chip(&mut bus, is31fl3731::ADDR_RIGHT);
     }
 
     // Left-half direct-GPIO matrix. Scans rows 0-5 of the 12x7 keymap.
@@ -533,18 +506,20 @@ async fn main(_spawner: Spawner) {
     let rmk_config = RmkConfig {
         device_config: DeviceConfig {
             manufacturer: "RMK",
-            product_name: "ZSA Voyager",
+            product_name: "ZSA Moonlander Mark I",
+            vid: 0x3297,
+            pid: 0x1969,
+            serial_number: "vial:f64c2b3c;rmk:0.9.0;moonlander:reva",
             ..Default::default()
         },
         vial_config: VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[]),
         ..Default::default()
     };
 
-    // Internal flash for Vial keymap persistence. StorageConfig::default()
-    // parks storage in the last two flash sectors; memory.x reserves that
-    // range so the linker never places firmware there.
-    let flash = async_flash_wrapper(Flash::new_blocking(p.FLASH));
-    let storage_config = StorageConfig::default();
+    let mut flash = Flash::new_blocking(p.FLASH);
+    let storage_config =
+        storage_layout::prepare(&mut flash).expect("cannot prepare layout storage");
+    let flash = async_flash_wrapper(flash);
 
     let mut keymap_data = KeymapData::new(keymap::get_default_keymap());
     let mut behavior_config = BehaviorConfig::default();
@@ -576,10 +551,7 @@ async fn main(_spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap);
     let host_service = HostService::new(&keymap, &rmk_config);
 
-    // Storage init is done; release the warm-boot disconnect and hand
-    // PA12/USB back to the peripheral. The host sees D+ come up only
-    // now, well after any clear_storage flash erase has finished, so
-    // enumeration starts against a device that can respond immediately.
+    // Release D+ and hand USB to the peripheral after storage initialization.
     unsafe {
         // Restore PA12 MODER to input (0b00).
         let moder = 0x48000000 as *mut u32;
@@ -600,7 +572,7 @@ async fn main(_spawner: Spawner) {
         UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
     join4(
         run_all!(left_matrix, right_matrix, storage, watchdog_runner),
-        layer_indicator(&mut led_bit0, &mut led_bit1, &shared_i2c),
+        layer_indicator(&mut led_bit0, &mut led_bit1, &mut led_bit2, &shared_i2c),
         keyboard.run(),
         usb_transport.run(),
     )

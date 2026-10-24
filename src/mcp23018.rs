@@ -24,11 +24,14 @@ use rmk::matrix::KeyState;
 pub type SharedI2c = Mutex<NoopRawMutex, I2c<'static, Blocking, Master>>;
 
 /// Target byte for the two MCP-connected status LEDs. Bits 6/7 drive
-/// the physical LED4 / LED3 outputs (active LOW). All other bits must
+/// the physical LED5 / LED4 outputs (active LOW). All other bits must
 /// stay zero so we don't clobber the input pull-up OLAT state.
 /// Written by the layer indicator task; flushed to Port B by the
 /// matrix driver on the next scan pass when it changes.
 pub static LED_PORTB: AtomicU8 = AtomicU8::new(0xC0);
+
+/// Third right-hand indicator on GPA7 (active LOW). Bits 0-6 are strobes.
+pub static LED_PORTA: AtomicU8 = AtomicU8::new(0x80);
 
 const MCP_ADDR: u8 = 0x20;
 const REG_IODIRA: u8 = 0x00;
@@ -106,7 +109,7 @@ impl<'i, D: DebouncerTrait<12, 7>> Mcp23018Matrix<'i, D> {
             return;
         }
         for strobe in 0..STROBES {
-            let a_val: u8 = 0x7F & !(1u8 << strobe);
+            let a_val = (0x7F & !(1u8 << strobe)) | LED_PORTA.load(Ordering::Relaxed);
             if bus.blocking_write(MCP_ADDR, &[REG_GPIOA, a_val]).is_err() {
                 self.initialized = false;
                 return;

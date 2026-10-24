@@ -1,12 +1,12 @@
 [package]
-name = "rmk-zsa-voyager"
+name = "rmk-zsa-moonlander"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-rmk = { version = "0.9.0", default-features = false, features = ["vial", "storage", "watchdog", "zsa_voyager_bl"] }
+rmk = { version = "0.9.0", default-features = false, features = ["vial", "storage", "watchdog"] }
 
 embassy-stm32 = { version = "0.6", features = [
     "stm32f303cb",
@@ -27,12 +27,13 @@ rmk-palettefx = { version = "0.1.0", optional = true }
 cortex-m = { version = "0.7.9", features = ["critical-section-single-core"] }
 cortex-m-rt = "0.7.6"
 
-defmt = "1.1"
 panic-halt = "1.0"
 
 [features]
 default = ["palettefx"]
 palettefx = ["dep:rmk-palettefx"]
+# Recovery image only: resets saved key assignments on every boot.
+reset-layout = []
 
 [build-dependencies]
 xz2 = "0.1.7"
@@ -40,7 +41,7 @@ json = "0.12"
 const-gen = "1.6"
 
 [[bin]]
-name = "rmk-zsa-voyager"
+name = "rmk-zsa-moonlander"
 test = false
 bench = false
 

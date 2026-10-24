@@ -1,16 +1,16 @@
-/* ZSA Voyager memory layout
+/* Moonlander Mark I rev A (conservative 128 KB flash target)
  *
- * 8 KB bootloader at 0x08000000; firmware links at 0x08002000.
- * GD32F303 has 128K flash, 32K main RAM, 8K CCM at 0x10000000.
+ * Application starts at 0x08000000, including its vector table.
+ * STM32 DFU is in system ROM at 0x1FFFD800, not application flash.
+ * Use 128K flash and 32K main RAM on the STM32F303CB target.
  *
- * Last 4 KB of flash reserved for RMK's storage (Vial keymap persistence
- * via sequential-storage). StorageConfig::default() uses the last two
- * 2 KB sectors; we shrink the linker-visible FLASH length accordingly so
- * firmware never grows into the storage region.
+ * Last 12 KB reserved: one 2 KB layout-version page at 0x0801D000,
+ * then five 2 KB journal pages at 0x0801D800..0x08020000.
+ * Keep in sync with src/storage_layout.rs.
  */
 MEMORY
 {
-    FLASH : ORIGIN = 0x08002000, LENGTH = 128K - 8K - 4K
+    FLASH : ORIGIN = 0x08000000, LENGTH = 128K - 12K
     RAM   : ORIGIN = 0x20000000, LENGTH = 32K
     /* CCMRAM : ORIGIN = 0x10000000, LENGTH = 8K */
 }

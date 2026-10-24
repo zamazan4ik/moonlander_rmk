@@ -1,5 +1,5 @@
 {
-  description = "RMK firmware for the ZSA Voyager (GD32F303) - dev shell";
+  description = "RMK firmware for ZSA Moonlander Mark I rev A - dev shell";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -54,6 +54,7 @@
             flipLink
             pkgs.cargo-binutils
             pkgs.dfu-util
+            pkgs.ruby
             pkgs.stdenv.cc
           ];
 
