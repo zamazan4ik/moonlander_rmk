@@ -1,7 +1,7 @@
 use rmk::config::Hand;
 use rmk::types::action::KeyAction;
 use rmk::types::modifier::ModifierCombination;
-use rmk::{a, k, layer, light, mo, mt, shifted, user, wm};
+use rmk::{a, k, layer, light, macros, mo, mt, shifted, user, wm};
 
 /// Index into behavior_config.morse.morses.
 pub const _TD_ESC_EQL: u8 = 0;
@@ -33,8 +33,8 @@ pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
         layer!([
             // Left half
             [k!(Escape), k!(Kc1), k!(Kc2), k!(Kc3), k!(Kc4), k!(Kc5), k!(Equal)],
-            [shifted!(Minus), k!(Q), k!(W), k!(E), k!(R), k!(T), a!(No)],
-            [shifted!(Quote), k!(A), k!(S), k!(D), k!(F), k!(G), a!(No)],
+            [shifted!(Minus), k!(Q), k!(W), k!(E), k!(R), k!(T), macros!(0)],
+            [shifted!(Quote), k!(A), k!(S), k!(D), k!(F), k!(G), macros!(1)],
             [k!(Quote), k!(Z), k!(X), k!(C), k!(V), k!(B), a!(No)],
             [shifted!(NonusBackslash), a!(No), a!(No), a!(No), mo!(1), a!(No), a!(No)],
             // Three narrow thumbs, then the large red key.

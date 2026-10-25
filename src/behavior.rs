@@ -1,5 +1,9 @@
-use rmk::config::BehaviorConfig;
+use rmk::config::{BehaviorConfig, KeyboardMacrosConfig};
+use rmk::heapless::Vec;
 use rmk::keyboard::combo::{Combo, ComboConfig};
+use rmk::keyboard_macros::{MacroOperation, define_macro_sequences};
+use rmk::types::constants::MACRO_SPACE_SIZE;
+use rmk::types::keycode::HidKeyCode;
 use rmk::{k, shifted};
 
 pub fn get_default_behavior() -> BehaviorConfig {
@@ -130,5 +134,24 @@ pub fn get_default_behavior() -> BehaviorConfig {
         None,
     )));
 
+    behavior_config.keyboard_macros = KeyboardMacrosConfig::new(get_macro_sequences());
+
     behavior_config
+}
+
+pub fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
+    define_macro_sequences(&[
+        Vec::from_slice(&[
+            MacroOperation::Press(HidKeyCode::LGui),
+            MacroOperation::Tap(HidKeyCode::C),
+            MacroOperation::Release(HidKeyCode::LGui),
+        ])
+        .expect("too many elements"),
+        Vec::from_slice(&[
+            MacroOperation::Press(HidKeyCode::LGui),
+            MacroOperation::Tap(HidKeyCode::V),
+            MacroOperation::Release(HidKeyCode::LGui),
+        ])
+        .expect("too many elements"),
+    ])
 }
