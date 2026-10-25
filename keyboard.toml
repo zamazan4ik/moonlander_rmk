@@ -1,2 +1,5 @@
 [event.action]
 subs = 1
+
+[rmk]
+combo_max_num = 16

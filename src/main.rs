@@ -3,6 +3,7 @@
 
 #[macro_use]
 mod macros;
+mod behavior;
 mod boot;
 mod is31fl3731;
 mod keymap;
@@ -31,7 +32,7 @@ use is31fl3731::{LED_COUNT, MoonlanderLayout};
 use keymap::{COL, ROW};
 use mcp23018::{LED_PORTA, LED_PORTB, Mcp23018Matrix, SharedI2c};
 use panic_halt as _;
-use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, VialConfig};
+use rmk::config::{DeviceConfig, PositionalConfig, RmkConfig, VialConfig};
 use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::event::{ActionEvent, EventSubscriber, LayerChangeEvent, SubscribableEvent};
@@ -45,8 +46,6 @@ use rmk::storage::async_flash_wrapper;
 use rmk::types::action::Action;
 #[cfg(feature = "palettefx")]
 use rmk::types::action::LightAction;
-use rmk::types::keycode::{HidKeyCode, KeyCode};
-use rmk::types::morse::{Morse, MorseProfile};
 use rmk::usb::UsbTransport;
 use rmk::watchdog::{WatchdogFeed, WatchdogRunner};
 use rmk::{KeymapData, initialize_keymap_and_storage, run_all};
@@ -522,15 +521,8 @@ async fn main(_spawner: Spawner) {
     let flash = async_flash_wrapper(flash);
 
     let mut keymap_data = KeymapData::new(keymap::get_default_keymap());
-    let mut behavior_config = BehaviorConfig::default();
-    // TD_ESC_EQL: tap = Escape, double-tap = Equal.
-    let _ = behavior_config.morse.morses.push(Morse::new_from_vial(
-        Action::Key(KeyCode::Hid(HidKeyCode::Escape)),
-        Action::No,
-        Action::No,
-        Action::Key(KeyCode::Hid(HidKeyCode::Equal)),
-        MorseProfile::const_default(),
-    ));
+    let mut behavior_config = behavior::get_default_behavior();
+
     let per_key_config = PositionalConfig::new(keymap::HAND_MAP);
     let (keymap, mut storage) = initialize_keymap_and_storage(
         &mut keymap_data,
