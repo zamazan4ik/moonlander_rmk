@@ -1115,6 +1115,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "moonlander_rmk"
+version = "0.1.0"
+dependencies = [
+ "const-gen",
+ "cortex-m",
+ "cortex-m-rt",
+ "embassy-executor",
+ "embassy-stm32",
+ "embassy-sync",
+ "embassy-time",
+ "json",
+ "panic-halt",
+ "rmk",
+ "rmk-palettefx",
+ "xz2",
+]
+
+[[package]]
 name = "multiversion_no_op"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1450,24 +1468,6 @@ dependencies = [
  "serde",
  "strum",
  "toml",
-]
-
-[[package]]
-name = "rmk-zsa-moonlander"
-version = "0.1.0"
-dependencies = [
- "const-gen",
- "cortex-m",
- "cortex-m-rt",
- "embassy-executor",
- "embassy-stm32",
- "embassy-sync",
- "embassy-time",
- "json",
- "panic-halt",
- "rmk",
- "rmk-palettefx",
- "xz2",
 ]
 
 [[package]]

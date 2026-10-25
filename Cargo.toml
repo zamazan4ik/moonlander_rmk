@@ -1,5 +1,5 @@
 [package]
-name = "rmk-zsa-moonlander"
+name = "moonlander_rmk"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
@@ -30,7 +30,7 @@ cortex-m-rt = "0.7.7"
 panic-halt = "1.0"
 
 [features]
-default = ["palettefx"]
+default = []
 palettefx = ["dep:rmk-palettefx"]
 # Recovery image only: resets saved key assignments on every boot.
 reset-layout = []
@@ -41,7 +41,7 @@ json = "0.12"
 const-gen = "1.6"
 
 [[bin]]
-name = "rmk-zsa-moonlander"
+name = "moonlander_rmk"
 test = false
 bench = false
 
