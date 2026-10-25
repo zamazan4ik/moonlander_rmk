@@ -1,10 +1,10 @@
 use rmk::config::Hand;
 use rmk::types::action::KeyAction;
 use rmk::types::modifier::ModifierCombination;
-use rmk::{a, k, kbctrl, layer, light, lt, mt, shifted, user, wm};
+use rmk::{a, k, layer, light, mo, mt, shifted, user, wm};
 
 /// Index into behavior_config.morse.morses.
-pub const TD_ESC_EQL: u8 = 0;
+pub const _TD_ESC_EQL: u8 = 0;
 
 pub(crate) const ROW: usize = 12;
 pub(crate) const COL: usize = 7;
@@ -33,19 +33,19 @@ pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
         layer!([
             // Left half
             [k!(Escape), k!(Kc1), k!(Kc2), k!(Kc3), k!(Kc4), k!(Kc5), k!(Equal)],
-            [wm!(Minus, ModifierCombination::LSHIFT), k!(Q), k!(W), k!(E), k!(R), k!(T), k!(LeftBracket)],
-            [wm!(Quote, ModifierCombination::LSHIFT), k!(A), k!(S), k!(D), k!(F), k!(G), k!(RightBracket)],
-            [k!(Quote), mt!(Z, ModifierCombination::LALT), k!(X), k!(C), k!(V), k!(B), a!(No)],
-            [wm!(NonusBackslash, ModifierCombination::LSHIFT), k!(LAlt), k!(Left), k!(Right), k!(Home), a!(No), a!(No)],
+            [shifted!(Minus), k!(Q), k!(W), k!(E), k!(R), k!(T), a!(No)],
+            [shifted!(Quote), k!(A), k!(S), k!(D), k!(F), k!(G), a!(No)],
+            [k!(Quote), k!(Z), k!(X), k!(C), k!(V), k!(B), a!(No)],
+            [shifted!(NonusBackslash), a!(No), a!(No), a!(No), mo!(1), a!(No), a!(No)],
             // Three narrow thumbs, then the large red key.
             [k!(LShift), k!(Backspace), k!(Enter), k!(LCtrl), a!(No), a!(No), a!(No)],
 
             // Right half
             [k!(Equal), k!(Kc6), k!(Kc7), k!(Kc8), k!(Kc9), k!(Kc0), a!(No)],
             [k!(Delete), k!(Y), k!(U), k!(I), k!(O), k!(P), k!(Minus)],
-            [k!(Enter), k!(H), k!(J), k!(K), k!(L), k!(Semicolon), wm!(Semicolon, ModifierCombination::LSHIFT)],
+            [k!(Enter), k!(H), k!(J), k!(K), k!(L), k!(Semicolon), shifted!(Semicolon)],
             [a!(No), k!(N), k!(M), k!(Comma), k!(Dot), mt!(Slash, ModifierCombination::RALT), k!(Semicolon)],
-            [a!(No), a!(No), k!(End), k!(Up), k!(Down), k!(RAlt), k!(Slash)],
+            [a!(No), a!(No), mo!(2), k!(Up), k!(Down), k!(RAlt), k!(Slash)],
             // Large red key, then three narrow thumbs (left to right).
             [a!(No), a!(No), a!(No), k!(LAlt), k!(CapsLock), k!(Dot), k!(Space)]
         ]),
@@ -67,7 +67,7 @@ pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
             [a!(No), k!(Kc1), k!(Kc2), k!(Kc3), k!(Dot), k!(Equal), k!(Enter)],
             [a!(No), a!(No), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent)],
             // Large red key, then three narrow thumbs (left to right).
-            [a!(No), a!(No), a!(No), a!(Transparent), a!(Transparent), a!(Transparent), k!(Kc0)]
+            [a!(No), a!(No), a!(No), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent)]
         ]),
         // NAV: media, navigation, RGB controls. Outer top-right key enters DFU.
         layer!([
