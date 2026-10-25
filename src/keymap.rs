@@ -41,7 +41,7 @@ pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
             [k!(LShift), k!(Backspace), k!(Enter), k!(LCtrl), a!(No), a!(No), a!(No)],
 
             // Right half
-            [k!(Equal), k!(Kc6), k!(Kc7), k!(Kc8), k!(Kc9), k!(Kc0), a!(No)],
+            [k!(Equal), k!(Kc6), k!(Kc7), k!(Kc8), k!(Kc9), k!(Kc0), k!(Equal)],
             [k!(Delete), k!(Y), k!(U), k!(I), k!(O), k!(P), k!(Minus)],
             [k!(Enter), k!(H), k!(J), k!(K), k!(L), k!(Semicolon), shifted!(Semicolon)],
             [a!(No), k!(N), k!(M), k!(Comma), k!(Dot), mt!(Slash, ModifierCombination::RALT), k!(Semicolon)],
