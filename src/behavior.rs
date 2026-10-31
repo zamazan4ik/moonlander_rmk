@@ -2,6 +2,7 @@ use rmk::config::{BehaviorConfig, KeyboardMacrosConfig};
 use rmk::heapless::Vec;
 use rmk::keyboard::combo::{Combo, ComboConfig};
 use rmk::keyboard_macros::{MacroOperation, define_macro_sequences};
+use rmk::types::action::Action;
 use rmk::types::constants::MACRO_SPACE_SIZE;
 use rmk::types::keycode::HidKeyCode;
 use rmk::{k, shifted};
@@ -140,6 +141,8 @@ pub fn get_default_behavior() -> BehaviorConfig {
 }
 
 pub fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
+    // Copy & Paste macros
+    // TODO: make them OS-agnostic - support Copy&Paste for macOS/Windows/Linux (including ctrl+shift+c/v)
     define_macro_sequences(&[
         Vec::from_slice(&[
             MacroOperation::Press(HidKeyCode::LGui),
@@ -151,6 +154,24 @@ pub fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
             MacroOperation::Press(HidKeyCode::LGui),
             MacroOperation::Tap(HidKeyCode::V),
             MacroOperation::Release(HidKeyCode::LGui),
+        ])
+        .expect("too many elements"),
+        Vec::from_slice(&[
+            MacroOperation::Tap(HidKeyCode::CapsLock),
+            MacroOperation::Press(HidKeyCode::LShift),
+            MacroOperation::Tap(HidKeyCode::Kc2),
+            MacroOperation::Release(HidKeyCode::LShift),
+            MacroOperation::Tap(HidKeyCode::CapsLock),
+        ])
+        .expect("too many elements"),
+        Vec::from_slice(&[
+            MacroOperation::Tap(HidKeyCode::CapsLock),
+            MacroOperation::TapAction(Action::LayerToggleOnly(1)),
+        ])
+        .expect("too many elements"),
+        Vec::from_slice(&[
+            MacroOperation::Tap(HidKeyCode::CapsLock),
+            MacroOperation::TapAction(Action::LayerToggleOnly(0)),
         ])
         .expect("too many elements"),
     ])
