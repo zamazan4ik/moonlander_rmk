@@ -8,6 +8,11 @@ use rmk::types::keycode::HidKeyCode;
 use rmk::{k, shifted};
 
 use crate::keymap::{MACRO_AMPERSAND, MACRO_AT, MACRO_CARET, MACRO_DOLLAR, MACRO_HASH, macro_key};
+use crate::layout_switch::{
+    SYMBOL_DELAY_MS, TOGGLE_DELAY_MS, USER_AMPERSAND, USER_AT, USER_CARET, USER_DOLLAR, USER_GRAVE,
+    USER_HASH, USER_LBRACE, USER_LBRACKET, USER_PIPE, USER_QUOTE, USER_RBRACE, USER_RBRACKET,
+    USER_TOGGLE,
+};
 
 pub fn get_default_behavior() -> BehaviorConfig {
     let mut behavior_config = BehaviorConfig::default();
@@ -193,22 +198,23 @@ pub fn get_default_behavior() -> BehaviorConfig {
     behavior_config
 }
 
-/// Wrap an EN keystroke for the RU layer: switch the OS layout to EN, type `ops`,
-/// switch back. The delays let the OS apply the layout change before and after the
-/// keystroke; raise them if a host drops or mistypes symbols.
-fn wrap_en(ops: &[MacroOperation]) -> Vec<MacroOperation, 8> {
-    let mut seq = Vec::new();
-    let _ = seq.push(MacroOperation::Tap(HidKeyCode::CapsLock));
-    let _ = seq.push(MacroOperation::Delay(40));
-    let _ = seq.extend_from_slice(ops);
-    let _ = seq.push(MacroOperation::Delay(20));
-    let _ = seq.push(MacroOperation::Tap(HidKeyCode::CapsLock));
-    seq
+/// RU symbol: `layout_switch` types it through the EN layout while the `Delay`
+/// keeps RMK's key processing paused, so later keys stay in order.
+fn wrapped_symbol(user: u8) -> [MacroOperation; 2] {
+    [
+        MacroOperation::TapAction(Action::User(user)),
+        MacroOperation::Delay(SYMBOL_DELAY_MS),
+    ]
 }
 
-/// A one-character `Text` op: a single byte in the macro space, and RMK adds Shift itself.
-const fn text(key: HidKeyCode, shift: bool) -> MacroOperation {
-    MacroOperation::Text(key, shift)
+/// Toggle the host layout (held Caps Lock, in `layout_switch`) and the matching
+/// keymap layer together.
+fn switch_to_layer(layer: u8) -> [MacroOperation; 3] {
+    [
+        MacroOperation::TapAction(Action::User(USER_TOGGLE)),
+        MacroOperation::Delay(TOGGLE_DELAY_MS),
+        MacroOperation::TapAction(Action::LayerToggleOnly(layer)),
+    ]
 }
 
 /// Serialize one macro and append it, including its End byte, to `out`.
@@ -219,9 +225,14 @@ const fn text(key: HidKeyCode, shift: bool) -> MacroOperation {
 /// Encoded macros never contain a 0 byte except End.
 #[inline(never)]
 fn append_macro(out: &mut [u8; MACRO_SPACE_SIZE], len: &mut usize, ops: &[MacroOperation]) {
-    let seq: Vec<MacroOperation, MACRO_SPACE_SIZE> = Vec::from_slice(ops).expect("too many elements");
+    let seq: Vec<MacroOperation, MACRO_SPACE_SIZE> =
+        Vec::from_slice(ops).expect("too many elements");
     let bin = define_macro_sequences(core::slice::from_ref(&seq));
-    let n = bin.iter().position(|&b| b == 0).expect("macro has no End byte") + 1;
+    let n = bin
+        .iter()
+        .position(|&b| b == 0)
+        .expect("macro has no End byte")
+        + 1;
     out.get_mut(*len..*len + n)
         .expect("macros exceed macro_space_size")
         .copy_from_slice(&bin[..n]);
@@ -235,47 +246,44 @@ pub fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
 
     // Copy & Paste macros
     // TODO: make them OS-agnostic - support Copy&Paste for macOS/Windows/Linux (including ctrl+shift+c/v)
-    append_macro(&mut out, &mut len, &[
-        MacroOperation::Press(HidKeyCode::LGui),
-        MacroOperation::Tap(HidKeyCode::C),
-        MacroOperation::Release(HidKeyCode::LGui),
-    ]);
-    append_macro(&mut out, &mut len, &[
-        MacroOperation::Press(HidKeyCode::LGui),
-        MacroOperation::Tap(HidKeyCode::V),
-        MacroOperation::Release(HidKeyCode::LGui),
-    ]);
-    append_macro(&mut out, &mut len, &wrap_en(&[text(HidKeyCode::Kc2, true)])); // @
-    append_macro(&mut out, &mut len, &[
-        MacroOperation::Tap(HidKeyCode::CapsLock),
-        MacroOperation::TapAction(Action::LayerToggleOnly(1)),
-    ]);
-    append_macro(&mut out, &mut len, &[
-        MacroOperation::Tap(HidKeyCode::CapsLock),
-        MacroOperation::TapAction(Action::LayerToggleOnly(0)),
-    ]);
+    append_macro(
+        &mut out,
+        &mut len,
+        &[
+            MacroOperation::Press(HidKeyCode::LGui),
+            MacroOperation::Tap(HidKeyCode::C),
+            MacroOperation::Release(HidKeyCode::LGui),
+        ],
+    );
+    append_macro(
+        &mut out,
+        &mut len,
+        &[
+            MacroOperation::Press(HidKeyCode::LGui),
+            MacroOperation::Tap(HidKeyCode::V),
+            MacroOperation::Release(HidKeyCode::LGui),
+        ],
+    );
+    append_macro(&mut out, &mut len, &wrapped_symbol(USER_AT));
+    append_macro(&mut out, &mut len, &switch_to_layer(1));
+    append_macro(&mut out, &mut len, &switch_to_layer(0));
 
     // Symbols missing in ЙЦУКЕН, typed through the EN layout.
-    for op in [
-        text(HidKeyCode::Kc3, true),           // #
-        text(HidKeyCode::Kc4, true),           // $
-        text(HidKeyCode::Kc6, true),           // ^
-        text(HidKeyCode::Kc7, true),           // &
-        text(HidKeyCode::LeftBracket, false),  // [
-        text(HidKeyCode::RightBracket, false), // ]
-        text(HidKeyCode::LeftBracket, true),   // {
-        text(HidKeyCode::RightBracket, true),  // }
-        text(HidKeyCode::Quote, false),        // '
-        text(HidKeyCode::Grave, false),        // `
+    for user in [
+        USER_HASH,
+        USER_DOLLAR,
+        USER_CARET,
+        USER_AMPERSAND,
+        USER_LBRACKET,
+        USER_RBRACKET,
+        USER_LBRACE,
+        USER_RBRACE,
+        USER_QUOTE,
+        USER_GRAVE,
+        USER_PIPE,
     ] {
-        append_macro(&mut out, &mut len, &wrap_en(&[op]));
+        append_macro(&mut out, &mut len, &wrapped_symbol(user));
     }
-    // Same code as EN shifted NonusBackslash, which has no ASCII Text form.
-    append_macro(&mut out, &mut len, &wrap_en(&[
-        MacroOperation::Press(HidKeyCode::LShift),
-        MacroOperation::Tap(HidKeyCode::NonusBackslash),
-        MacroOperation::Release(HidKeyCode::LShift),
-    ]));
 
     out
 }

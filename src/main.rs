@@ -7,6 +7,7 @@ mod behavior;
 mod boot;
 mod is31fl3731;
 mod keymap;
+mod layout_switch;
 mod led;
 mod mcp23018;
 mod storage_layout;
@@ -32,7 +33,7 @@ use panic_halt as _;
 use rmk::config::{DeviceConfig, PositionalConfig, RmkConfig, VialConfig};
 use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
-use rmk::futures::future::join4;
+use rmk::futures::future::join5;
 use rmk::host::HostService;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
@@ -213,9 +214,10 @@ async fn main(_spawner: Spawner) {
 
     let mut usb_transport =
         UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
-    join4(
+    join5(
         run_all!(left_matrix, right_matrix, storage, watchdog_runner),
         led::layer_indicator(&mut led_bit0, &mut led_bit1, &mut led_bit2, &shared_i2c),
+        layout_switch::run(),
         keyboard.run(),
         usb_transport.run(),
     )

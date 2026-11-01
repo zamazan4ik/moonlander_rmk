@@ -29,19 +29,23 @@ Five layers are editable through Vial:
 ### Layout-independent symbols
 
 Every symbol is on the same physical key in EN and RU. The layout key
-(right thumb) taps Caps Lock and switches layer 0 ↔ 1 together, so the
+(right thumb) presses Caps Lock and switches layer 0 ↔ 1 together, so the
 firmware always knows which host layout is active. On the RU layers:
 
 - symbols that exist in ЙЦУКЕН (`" ; : / .`) are sent at their Russian positions;
 - symbols missing in ЙЦУКЕН (`@ # $ ^ & [ ] { } ' \``) are typed by a macro that
-  taps Caps Lock, types the EN key, and taps Caps Lock again;
+  switches the host to EN, types the EN key, and switches back (`src/layout_switch.rs`);
 - Х Ъ Ё Э are vertical combos: Y+H, J+M, F+R and H+N. Hold Shift for capitals.
 
 Host requirements: Caps Lock must toggle EN/RU, and the Russian layout must be the
 standard ЙЦУКЕН ("Russian" on Windows, `ru` on Linux, "Russian – PC" on macOS).
 If the host layout is changed another way, the layers drift; press the layout key
-to resync. Raise the `Delay`s in `wrap_en` (`src/behavior.rs`) if a host drops or
-mistypes wrapped symbols.
+to resync.
+
+Caps Lock is held for 80 ms per switch (`CAPS_HOLD_MS`), because macOS ignores
+shorter presses, and each switch gets 80 ms to settle (`LAYOUT_SETTLE_MS`).
+Raise these if a host drops or mistypes wrapped symbols. Keys pressed while a
+symbol is being typed are queued and sent afterwards, in order.
 
 The additional right-hand column is the inner column: 6/Y/H start at column 1.
 Thumb assignments, in matrix column order:

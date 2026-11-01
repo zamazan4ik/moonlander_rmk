@@ -1,5 +1,6 @@
 [event.action]
-subs = 1
+# led::layer_indicator and layout_switch::run
+subs = 2
 
 [rmk]
 combo_max_num = 32
