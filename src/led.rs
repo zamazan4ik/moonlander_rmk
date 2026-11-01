@@ -139,9 +139,10 @@ impl Effect {
 /// in the main tick loop instead of being a static paint.
 fn paint_static_layer(rgb: &mut is31fl3731::Rgb, layer: u8) {
     match layer {
-        1 => rgb.set_all(0, 0, 255),     // symbols/F-keys: blue
-        2 => rgb.set_all(255, 0, 0),     // symbols/F-keys:red
+        1 => rgb.set_all(0, 0, 255),     // Russian: blue
+        2 => rgb.set_all(255, 0, 0),     // symbols/F-keys: red
         3 => rgb.set_all(0, 255, 0),     // media/nav: green
+        4 => rgb.set_all(255, 0, 128),   // RU symbols/F-keys: pink
         _ => rgb.set_all(255, 255, 255), // base layer: white
     }
 }

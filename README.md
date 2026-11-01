@@ -18,11 +18,30 @@ the bootloader resides in STM32 system ROM. Rev B (Moonlander Bootloader,
 
 ## Keymap
 
-Three layers are editable through Vial:
+Five layers are editable through Vial:
 
-- BASE: QWERTY, with B/N on the fourth alpha row and modifiers/arrows below.
-- SYM: symbols, brackets, function keys and a right-hand numpad.
-- NAV: navigation, media, RGB and ROM DFU.
+- 0 EN: QWERTY, with B/N on the fourth alpha row and modifiers/arrows below.
+- 1 RU: ЙЦУКЕН on the same keys as EN.
+- 2 SYM: symbols, brackets, function keys and a right-hand numpad.
+- 3 NAV: navigation, media, RGB and ROM DFU.
+- 4 SYM-RU: SYM for the RU layer.
+
+### Layout-independent symbols
+
+Every symbol is on the same physical key in EN and RU. The layout key
+(right thumb) taps Caps Lock and switches layer 0 ↔ 1 together, so the
+firmware always knows which host layout is active. On the RU layers:
+
+- symbols that exist in ЙЦУКЕН (`" ; : / .`) are sent at their Russian positions;
+- symbols missing in ЙЦУКЕН (`@ # $ ^ & [ ] { } ' \``) are typed by a macro that
+  taps Caps Lock, types the EN key, and taps Caps Lock again;
+- Х Ъ Ё Э are vertical combos: Y+H, J+M, F+R and H+N. Hold Shift for capitals.
+
+Host requirements: Caps Lock must toggle EN/RU, and the Russian layout must be the
+standard ЙЦУКЕН ("Russian" on Windows, `ru` on Linux, "Russian – PC" on macOS).
+If the host layout is changed another way, the layers drift; press the layout key
+to resync. Raise the `Delay`s in `wrap_en` (`src/behavior.rs`) if a host drops or
+mistypes wrapped symbols.
 
 The additional right-hand column is the inner column: 6/Y/H start at column 1.
 Thumb assignments, in matrix column order:
