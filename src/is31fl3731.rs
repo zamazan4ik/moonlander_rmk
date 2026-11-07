@@ -136,14 +136,6 @@ const LED_TABLE: [LedEntry; LED_COUNT] = [
     e(1, c(8, 14), c(7, 14), c(9, 14)),
 ];
 
-/// Horizontal positions in switch-column units for the fallback rainbow.
-#[cfg(not(feature = "palettefx"))]
-const LED_X: [u8; LED_COUNT] = [
-    0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6,
-    6, 6, 7, 7, 15, 15, 15, 15, 15, 14, 14, 14, 14, 14, 13, 13, 13, 13, 13, 12, 12, 12, 12, 12, 11,
-    11, 11, 11, 11, 10, 10, 10, 10, 9, 9, 9, 10, 9, 8, 8,
-];
-
 /// Physical positions from Moonlander's QMK RGB layout.
 /// Both axes use 255/240, preserving aspect ratio for rotations and ripples.
 #[cfg(feature = "palettefx")]
@@ -234,25 +226,6 @@ impl LedLayout for MoonlanderLayout {
     fn position(&self, index: usize) -> (u8, u8) {
         LED_POS[index]
     }
-}
-
-/// Adafruit-style hue wheel: sweeps red -> green -> blue -> red.
-#[cfg(not(feature = "palettefx"))]
-fn wheel(pos: u8) -> (u8, u8, u8) {
-    if pos < 85 {
-        (255 - pos * 3, pos * 3, 0)
-    } else if pos < 170 {
-        let p = pos - 85;
-        (0, 255 - p * 3, p * 3)
-    } else {
-        let p = pos - 170;
-        (p * 3, 0, 255 - p * 3)
-    }
-}
-
-#[cfg(not(feature = "palettefx"))]
-fn scale(c: u8, brightness: u8) -> u8 {
-    ((c as u16 * brightness as u16) / 255) as u8
 }
 
 /// Sentinel in `KEY_TO_LED` for a matrix cell with no physical LED.
@@ -410,22 +383,6 @@ impl Rgb {
             self.bufs[chip][entry.r as usize] = rgb.r;
             self.bufs[chip][entry.g as usize] = rgb.g;
             self.bufs[chip][entry.b as usize] = rgb.b;
-            self.dirty[chip] = true;
-        }
-    }
-
-    /// Horizontal rainbow: each key's hue is offset by its x position
-    /// (8 hue units per column) plus `phase`. `brightness` scales the
-    /// whole output.
-    #[cfg(not(feature = "palettefx"))]
-    pub fn paint_rainbow(&mut self, phase: u8, brightness: u8) {
-        for (idx, entry) in LED_TABLE.iter().enumerate() {
-            let hue = (LED_X[idx] as u16 * 8 + phase as u16) as u8;
-            let (r, g, b) = wheel(hue);
-            let chip = entry.chip as usize;
-            self.bufs[chip][entry.r as usize] = scale(r, brightness);
-            self.bufs[chip][entry.g as usize] = scale(g, brightness);
-            self.bufs[chip][entry.b as usize] = scale(b, brightness);
             self.dirty[chip] = true;
         }
     }

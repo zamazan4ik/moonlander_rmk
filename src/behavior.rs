@@ -2,17 +2,151 @@ use rmk::config::{BehaviorConfig, KeyboardMacrosConfig};
 use rmk::heapless::Vec;
 use rmk::keyboard::combo::{Combo, ComboConfig};
 use rmk::keyboard_macros::{MacroOperation, define_macro_sequences};
-use rmk::types::action::Action;
+use rmk::types::action::{Action, KeyAction};
 use rmk::types::constants::MACRO_SPACE_SIZE;
-use rmk::types::keycode::HidKeyCode;
-use rmk::{k, shifted};
+use rmk::types::keycode::{HidKeyCode, KeyCode};
+use rmk::types::modifier::ModifierCombination;
 
-use crate::keymap::{MACRO_AMPERSAND, MACRO_AT, MACRO_CARET, MACRO_DOLLAR, MACRO_HASH, macro_key};
-use crate::layout_switch::{
-    SYMBOL_DELAY_MS, TOGGLE_DELAY_MS, USER_AMPERSAND, USER_AT, USER_CARET, USER_DOLLAR, USER_GRAVE,
-    USER_HASH, USER_LBRACE, USER_LBRACKET, USER_PIPE, USER_QUOTE, USER_RBRACE, USER_RBRACKET,
-    USER_TOGGLE,
+use crate::layout_switch::{self, EnSymbol};
+
+/// Default macros. The index of each one is its position in the macro table:
+/// the fixed macros first, then one per `EnSymbol`, in variant order.
+#[derive(Clone, Copy)]
+pub(crate) enum Macro {
+    /// Cmd+C.
+    Copy,
+    /// Cmd+V.
+    Paste,
+    /// Switch the host and the keymap to RU.
+    LayoutRu,
+    /// Switch the host and the keymap to EN.
+    LayoutEn,
+    /// Type a symbol missing in ЙЦУКЕН through the EN layout.
+    Symbol(EnSymbol),
+}
+
+impl Macro {
+    const FIXED: [Self; 4] = [Self::Copy, Self::Paste, Self::LayoutRu, Self::LayoutEn];
+
+    const fn index(self) -> u8 {
+        match self {
+            Self::Copy => 0,
+            Self::Paste => 1,
+            Self::LayoutRu => 2,
+            Self::LayoutEn => 3,
+            Self::Symbol(symbol) => Self::FIXED.len() as u8 + symbol as u8,
+        }
+    }
+
+    /// Keymap action that runs this macro.
+    pub(crate) const fn key(self) -> KeyAction {
+        KeyAction::Single(Action::TriggerMacro(self.index()))
+    }
+
+    fn ops(self) -> Vec<MacroOperation, 3> {
+        let ops: &[MacroOperation] = match self {
+            // TODO: make them OS-agnostic - support Copy&Paste for macOS/Windows/Linux (including ctrl+shift+c/v)
+            Self::Copy => &[
+                MacroOperation::Press(HidKeyCode::LGui),
+                MacroOperation::Tap(HidKeyCode::C),
+                MacroOperation::Release(HidKeyCode::LGui),
+            ],
+            Self::Paste => &[
+                MacroOperation::Press(HidKeyCode::LGui),
+                MacroOperation::Tap(HidKeyCode::V),
+                MacroOperation::Release(HidKeyCode::LGui),
+            ],
+            Self::LayoutRu => &const { layout_switch::toggle_macro(RU_LAYER) },
+            Self::LayoutEn => &const { layout_switch::toggle_macro(EN_LAYER) },
+            Self::Symbol(symbol) => &layout_switch::symbol_macro(symbol),
+        };
+        Vec::from_slice(ops).expect("too many elements")
+    }
+}
+
+// The macro table is FIXED then EnSymbol::ALL, so FIXED must be in index order.
+const _: () = {
+    let mut i = 0;
+    while i < Macro::FIXED.len() {
+        assert!(
+            Macro::FIXED[i].index() as usize == i,
+            "Macro::FIXED is out of index order"
+        );
+        i += 1;
+    }
 };
+
+/// Keymap action for a symbol typed through the EN layout (RU layers only).
+pub(crate) const fn via_en(symbol: EnSymbol) -> KeyAction {
+    Macro::Symbol(symbol).key()
+}
+
+const fn key(code: HidKeyCode) -> KeyAction {
+    KeyAction::Single(Action::Key(KeyCode::Hid(code)))
+}
+
+const fn shifted(code: HidKeyCode) -> KeyAction {
+    KeyAction::Single(Action::KeyWithModifier(code, ModifierCombination::LSHIFT))
+}
+
+const EN_LAYER: u8 = 0;
+const RU_LAYER: u8 = 1;
+
+/// Number + top-row letter -> the shifted number. Symbols missing in ЙЦУКЕН
+/// get an EN-only combo plus an RU one typed through the EN layout; the rest
+/// are the same in both layouts and fire on every layer.
+const NUMBER_SYMBOL_COMBOS: [(HidKeyCode, HidKeyCode, Option<EnSymbol>); 10] = [
+    (HidKeyCode::Kc1, HidKeyCode::Q, None),
+    (HidKeyCode::Kc2, HidKeyCode::W, Some(EnSymbol::At)),
+    (HidKeyCode::Kc3, HidKeyCode::E, Some(EnSymbol::Hash)),
+    (HidKeyCode::Kc4, HidKeyCode::R, Some(EnSymbol::Dollar)),
+    (HidKeyCode::Kc5, HidKeyCode::T, None),
+    (HidKeyCode::Kc6, HidKeyCode::Y, Some(EnSymbol::Caret)),
+    (HidKeyCode::Kc7, HidKeyCode::U, Some(EnSymbol::Ampersand)),
+    (HidKeyCode::Kc8, HidKeyCode::I, None),
+    (HidKeyCode::Kc9, HidKeyCode::O, None),
+    (HidKeyCode::Kc0, HidKeyCode::P, None),
+];
+
+/// The number row, left to right. Each pair of neighbours -> F1..F12.
+const NUMBER_ROW: [HidKeyCode; 13] = [
+    HidKeyCode::Escape,
+    HidKeyCode::Kc1,
+    HidKeyCode::Kc2,
+    HidKeyCode::Kc3,
+    HidKeyCode::Kc4,
+    HidKeyCode::Kc5,
+    HidKeyCode::Equal,
+    HidKeyCode::Kc6,
+    HidKeyCode::Kc7,
+    HidKeyCode::Kc8,
+    HidKeyCode::Kc9,
+    HidKeyCode::Kc0,
+    HidKeyCode::Equal,
+];
+const F_KEYS: [HidKeyCode; 12] = [
+    HidKeyCode::F1,
+    HidKeyCode::F2,
+    HidKeyCode::F3,
+    HidKeyCode::F4,
+    HidKeyCode::F5,
+    HidKeyCode::F6,
+    HidKeyCode::F7,
+    HidKeyCode::F8,
+    HidKeyCode::F9,
+    HidKeyCode::F10,
+    HidKeyCode::F11,
+    HidKeyCode::F12,
+];
+
+/// Russian letters without a dedicated key: vertical chords, as in the QMK firmware.
+/// Х = Н+Р (Y+H), Ъ = О+Ь (J+M), Ё = А+К (F+R), Э = Р+Т (H+N). Hold Shift for capitals.
+const RU_LETTER_COMBOS: [(HidKeyCode, HidKeyCode, HidKeyCode); 4] = [
+    (HidKeyCode::Y, HidKeyCode::H, HidKeyCode::LeftBracket),
+    (HidKeyCode::J, HidKeyCode::M, HidKeyCode::RightBracket),
+    (HidKeyCode::F, HidKeyCode::R, HidKeyCode::Grave),
+    (HidKeyCode::H, HidKeyCode::N, HidKeyCode::Quote),
+];
 
 pub fn get_default_behavior() -> BehaviorConfig {
     let mut behavior_config = BehaviorConfig::default();
@@ -26,195 +160,32 @@ pub fn get_default_behavior() -> BehaviorConfig {
         MorseProfile::const_default(),
     ));*/
 
-    // Combo group for special symbols: number + top row letter -> shifted number.
-    // ! % * ( ) are the same in both layouts, so they fire on every layer.
-    // @ # $ ^ & are EN-only here; the RU layer has its own copies below.
-    behavior_config.combo.combos[0] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc1), k!(Q)],
-        shifted!(Kc1),
-        None,
-    )));
-    behavior_config.combo.combos[1] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc2), k!(W)],
-        shifted!(Kc2),
-        Some(0),
-    )));
-    behavior_config.combo.combos[2] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc3), k!(E)],
-        shifted!(Kc3),
-        Some(0),
-    )));
-    behavior_config.combo.combos[3] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc4), k!(R)],
-        shifted!(Kc4),
-        Some(0),
-    )));
-    behavior_config.combo.combos[4] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc5), k!(T)],
-        shifted!(Kc5),
-        None,
-    )));
-    behavior_config.combo.combos[5] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc6), k!(Y)],
-        shifted!(Kc6),
-        Some(0),
-    )));
-    behavior_config.combo.combos[6] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc7), k!(U)],
-        shifted!(Kc7),
-        Some(0),
-    )));
-    behavior_config.combo.combos[7] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc8), k!(I)],
-        shifted!(Kc8),
-        None,
-    )));
-    behavior_config.combo.combos[8] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc9), k!(O)],
-        shifted!(Kc9),
-        None,
-    )));
-    behavior_config.combo.combos[9] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc0), k!(P)],
-        shifted!(Kc0),
-        None,
-    )));
+    let mut slots = behavior_config.combo.combos.iter_mut();
+    let mut add = |a: HidKeyCode, b: HidKeyCode, output: KeyAction, layer: Option<u8>| {
+        *slots.next().expect("raise combo_max_num in keyboard.toml") = Some(Combo::new(
+            ComboConfig::new([key(a), key(b)], output, layer),
+        ));
+    };
 
-    // Combo group for F-row: two near buttons at the number row -> F-button
-    behavior_config.combo.combos[10] = Some(Combo::new(ComboConfig::new(
-        [k!(Escape), k!(Kc1)],
-        k!(F1),
-        None,
-    )));
-    behavior_config.combo.combos[11] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc1), k!(Kc2)],
-        k!(F2),
-        None,
-    )));
-    behavior_config.combo.combos[12] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc2), k!(Kc3)],
-        k!(F3),
-        None,
-    )));
-    behavior_config.combo.combos[13] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc3), k!(Kc4)],
-        k!(F4),
-        None,
-    )));
-    behavior_config.combo.combos[14] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc4), k!(Kc5)],
-        k!(F5),
-        None,
-    )));
-    behavior_config.combo.combos[15] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc5), k!(Equal)],
-        k!(F6),
-        None,
-    )));
-    behavior_config.combo.combos[16] = Some(Combo::new(ComboConfig::new(
-        [k!(Equal), k!(Kc6)],
-        k!(F7),
-        None,
-    )));
-    behavior_config.combo.combos[17] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc6), k!(Kc7)],
-        k!(F8),
-        None,
-    )));
-    behavior_config.combo.combos[18] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc7), k!(Kc8)],
-        k!(F9),
-        None,
-    )));
-    behavior_config.combo.combos[19] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc8), k!(Kc9)],
-        k!(F10),
-        None,
-    )));
-    behavior_config.combo.combos[20] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc9), k!(Kc0)],
-        k!(F11),
-        None,
-    )));
-    behavior_config.combo.combos[21] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc0), k!(Equal)],
-        k!(F12),
-        None,
-    )));
-
-    // RU copies of the symbol combos: these symbols are missing in ЙЦУКЕН,
-    // so they go through the EN wrapper macros.
-    behavior_config.combo.combos[22] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc2), k!(W)],
-        macro_key(MACRO_AT),
-        Some(1),
-    )));
-    behavior_config.combo.combos[23] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc3), k!(E)],
-        macro_key(MACRO_HASH),
-        Some(1),
-    )));
-    behavior_config.combo.combos[24] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc4), k!(R)],
-        macro_key(MACRO_DOLLAR),
-        Some(1),
-    )));
-    behavior_config.combo.combos[25] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc6), k!(Y)],
-        macro_key(MACRO_CARET),
-        Some(1),
-    )));
-    behavior_config.combo.combos[26] = Some(Combo::new(ComboConfig::new(
-        [k!(Kc7), k!(U)],
-        macro_key(MACRO_AMPERSAND),
-        Some(1),
-    )));
-
-    // Russian letters without a dedicated key: vertical chords, as in the QMK firmware.
-    // Х = Н+Р (Y+H), Ъ = О+Ь (J+M), Ё = А+К (F+R), Э = Р+Т (H+N). Hold Shift for capitals.
-    behavior_config.combo.combos[27] = Some(Combo::new(ComboConfig::new(
-        [k!(Y), k!(H)],
-        k!(LeftBracket),
-        Some(1),
-    )));
-    behavior_config.combo.combos[28] = Some(Combo::new(ComboConfig::new(
-        [k!(J), k!(M)],
-        k!(RightBracket),
-        Some(1),
-    )));
-    behavior_config.combo.combos[29] = Some(Combo::new(ComboConfig::new(
-        [k!(F), k!(R)],
-        k!(Grave),
-        Some(1),
-    )));
-    behavior_config.combo.combos[30] = Some(Combo::new(ComboConfig::new(
-        [k!(H), k!(N)],
-        k!(Quote),
-        Some(1),
-    )));
+    for (number, letter, ru) in NUMBER_SYMBOL_COMBOS {
+        match ru {
+            None => add(number, letter, shifted(number), None),
+            Some(symbol) => {
+                add(number, letter, shifted(number), Some(EN_LAYER));
+                add(number, letter, via_en(symbol), Some(RU_LAYER));
+            }
+        }
+    }
+    for (pair, f_key) in NUMBER_ROW.windows(2).zip(F_KEYS) {
+        add(pair[0], pair[1], key(f_key), None);
+    }
+    for (a, b, letter) in RU_LETTER_COMBOS {
+        add(a, b, key(letter), Some(RU_LAYER));
+    }
 
     behavior_config.keyboard_macros = KeyboardMacrosConfig::new(get_macro_sequences());
 
     behavior_config
-}
-
-/// RU symbol: `layout_switch` types it through the EN layout while the `Delay`
-/// keeps RMK's key processing paused, so later keys stay in order.
-fn wrapped_symbol(user: u8) -> [MacroOperation; 2] {
-    [
-        MacroOperation::TapAction(Action::User(user)),
-        MacroOperation::Delay(SYMBOL_DELAY_MS),
-    ]
-}
-
-/// Toggle the host layout (held Caps Lock, in `layout_switch`) and the matching
-/// keymap layer together.
-fn switch_to_layer(layer: u8) -> [MacroOperation; 3] {
-    [
-        MacroOperation::TapAction(Action::User(USER_TOGGLE)),
-        MacroOperation::Delay(TOGGLE_DELAY_MS),
-        MacroOperation::TapAction(Action::LayerToggleOnly(layer)),
-    ]
 }
 
 /// Serialize one macro and append it, including its End byte, to `out`.
@@ -239,51 +210,14 @@ fn append_macro(out: &mut [u8; MACRO_SPACE_SIZE], len: &mut usize, ops: &[MacroO
     *len += n;
 }
 
-/// Macro order must match the MACRO_* indices in keymap.rs.
 pub fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
     let mut out = [0; MACRO_SPACE_SIZE];
     let mut len = 0;
-
-    // Copy & Paste macros
-    // TODO: make them OS-agnostic - support Copy&Paste for macOS/Windows/Linux (including ctrl+shift+c/v)
-    append_macro(
-        &mut out,
-        &mut len,
-        &[
-            MacroOperation::Press(HidKeyCode::LGui),
-            MacroOperation::Tap(HidKeyCode::C),
-            MacroOperation::Release(HidKeyCode::LGui),
-        ],
-    );
-    append_macro(
-        &mut out,
-        &mut len,
-        &[
-            MacroOperation::Press(HidKeyCode::LGui),
-            MacroOperation::Tap(HidKeyCode::V),
-            MacroOperation::Release(HidKeyCode::LGui),
-        ],
-    );
-    append_macro(&mut out, &mut len, &wrapped_symbol(USER_AT));
-    append_macro(&mut out, &mut len, &switch_to_layer(1));
-    append_macro(&mut out, &mut len, &switch_to_layer(0));
-
-    // Symbols missing in ЙЦУКЕН, typed through the EN layout.
-    for user in [
-        USER_HASH,
-        USER_DOLLAR,
-        USER_CARET,
-        USER_AMPERSAND,
-        USER_LBRACKET,
-        USER_RBRACKET,
-        USER_LBRACE,
-        USER_RBRACE,
-        USER_QUOTE,
-        USER_GRAVE,
-        USER_PIPE,
-    ] {
-        append_macro(&mut out, &mut len, &wrapped_symbol(user));
+    for m in Macro::FIXED
+        .into_iter()
+        .chain(EnSymbol::ALL.map(Macro::Symbol))
+    {
+        append_macro(&mut out, &mut len, &m.ops());
     }
-
     out
 }

@@ -4,7 +4,7 @@ pub const PAGE_BYTES: u32 = 2048;
 pub const STORAGE_SECTORS: u8 = 5;
 pub const STORAGE_START: u32 = FLASH_BYTES - STORAGE_SECTORS as u32 * PAGE_BYTES;
 pub const MIGRATION_START: u32 = STORAGE_START - PAGE_BYTES;
-pub const LAYOUT_TAG: [u8; 8] = *b"MNLD0004";
+pub const LAYOUT_TAG: [u8; 8] = *b"MNLD0006";
 
 pub fn needs_migration(stored_tag: &[u8; 8]) -> bool {
     stored_tag != &LAYOUT_TAG

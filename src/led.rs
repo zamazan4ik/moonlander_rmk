@@ -42,8 +42,8 @@ fn apply_led_frame(
     );
 }
 
-/// Initial brightness. With palettefx this feeds `FrameParams::val`;
-/// without it scales the rainbow wheel output.
+/// Initial brightness (FrameParams::val).
+#[cfg(feature = "palettefx")]
 const RGB_BRIGHTNESS: u8 = 0x30;
 #[cfg(feature = "palettefx")]
 const MIN_VAL: u8 = 0x08;
@@ -205,8 +205,6 @@ pub async fn layer_indicator(
     let mut speed: u8 = RGB_SPEED;
     #[cfg(feature = "palettefx")]
     let mut hsv_frame = [Hsv::default(); LED_COUNT];
-    #[cfg(not(feature = "palettefx"))]
-    let mut phase: u8 = 0;
 
     const BOOT_FRAMES: [u8; 7] = [1, 2, 4, 8, 16, 32, 0];
     let (last, lit_frames) = BOOT_FRAMES.split_last().unwrap();

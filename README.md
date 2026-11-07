@@ -47,6 +47,11 @@ shorter presses, and each switch gets 80 ms to settle (`LAYOUT_SETTLE_MS`).
 Raise these if a host drops or mistypes wrapped symbols. Keys pressed while a
 symbol is being typed are queued and sent afterwards, in order.
 
+Holding a wrapped symbol repeats it, as on the EN layer: the host stays in EN
+with the key held until any key is released or pressed. After a long hold,
+pause briefly before typing on; a key pressed within ~160 ms of the release can
+still come out in EN.
+
 The additional right-hand column is the inner column: 6/Y/H start at column 1.
 Thumb assignments, in matrix column order:
 
