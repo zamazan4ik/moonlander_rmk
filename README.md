@@ -92,39 +92,11 @@ Do not flash this image to rev B. Both the binary's link address and the flashin
 address must be 0x08000000. After flashing, reconnect USB and check both halves.
 Normal USB identity is 3297:1969; the serial includes `moonlander:reva`.
 
-## Storage and recovery
+## Storage
 
-The conservative STM32F303CB target uses 128 KB of flash and 32 KB of main RAM.
-The last 12 KB of flash contain a 2 KB layout-version page followed by a 10 KB
-journal. Keep `memory.x` and `src/storage_layout.rs` consistent.
-
-A layout-version mismatch resets saved Vial configuration to compiled defaults
-once. Subsequent boots preserve edits. Export settings before changing firmware;
-an old Voyager layout cannot be imported unchanged because its coordinates differ.
-RMK can also reset settings when its own build hash changes.
-
-To explicitly restore defaults, build a recovery image:
-
-```sh
-cargo objcopy --release --features reset-layout -- -O binary moonlander-reset-layout.bin
-```
-
-The recovery image resets the layout on every boot. Boot it once, then flash a
-normal image.
-
-## Checks
-
-Build the normal image first so the ELF and binary match, then run:
-
-```sh
-ruby tests/check_keymap.rb
-ruby tests/check_reva_image.rb
-cargo test --manifest-path tests/storage-capacity/Cargo.toml --target "$(rustc -vV | sed -n 's/^host: //p')"
-```
-
-The checks cover physical key placement, vector addresses, storage boundaries,
-journal capacity, updates and reopening. The firmware build also checks Vial
-geometry and RGB channel uniqueness.
+The firmware keeps no settings in flash: the compiled keymap, combos and macros
+are used on every boot, so all 128 KB of flash is available to the application.
+To change the layout, edit the source and reflash.
 
 ## Hardware reference
 

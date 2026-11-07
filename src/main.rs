@@ -10,12 +10,10 @@ mod keymap;
 mod layout_switch;
 mod led;
 mod mcp23018;
-mod storage_layout;
 
 use core::ptr;
 
 use embassy_executor::Spawner;
-use embassy_stm32::flash::Flash;
 use embassy_stm32::gpio::{Input, Level, Output, Speed};
 use embassy_stm32::i2c::{self, I2c};
 use embassy_stm32::peripherals::USB;
@@ -35,10 +33,9 @@ use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join5;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
-use rmk::storage::async_flash_wrapper;
 use rmk::usb::UsbTransport;
 use rmk::watchdog::{WatchdogFeed, WatchdogRunner};
-use rmk::{KeymapData, initialize_keymap_and_storage, run_all};
+use rmk::{KeymapData, initialize_keymap, run_all};
 
 const IWDG_KR: *mut u32 = 0x4000_3000 as *mut u32;
 const IWDG_PR: *mut u32 = 0x4000_3004 as *mut u32;
@@ -98,7 +95,7 @@ async fn main(_spawner: Spawner) {
     let mut led_bit1 = Output::new(p.PB4, Level::Low, Speed::Low);
     let mut led_bit2 = Output::new(p.PB3, Level::Low, Speed::Low);
 
-    // Hold USB disconnected until flash initialization is complete, including
+    // Hold USB disconnected until keymap initialization is complete, including
     // when returning from ROM DFU, so enumeration starts only when we are ready.
     unsafe {
         // RCC_APB1ENR = 0x4002_101C, USB clock gate = bit 23
@@ -162,23 +159,11 @@ async fn main(_spawner: Spawner) {
         ..Default::default()
     };
 
-    let mut flash = Flash::new_blocking(p.FLASH);
-    let storage_config =
-        storage_layout::prepare(&mut flash).expect("cannot prepare layout storage");
-    let flash = async_flash_wrapper(flash);
-
     let mut keymap_data = KeymapData::new(keymap::get_default_keymap());
     let mut behavior_config = behavior::get_default_behavior();
 
     let per_key_config = PositionalConfig::new(keymap::HAND_MAP);
-    let (keymap, mut storage) = initialize_keymap_and_storage(
-        &mut keymap_data,
-        flash,
-        &storage_config,
-        &mut behavior_config,
-        &per_key_config,
-    )
-    .await;
+    let keymap = initialize_keymap(&mut keymap_data, &mut behavior_config, &per_key_config).await;
 
     let left_debouncer = DefaultDebouncer::<LEFT_ROWS, LEFT_COLS>::new();
     let mut left_matrix =
@@ -189,7 +174,7 @@ async fn main(_spawner: Spawner) {
 
     let mut keyboard = Keyboard::new(&keymap);
 
-    // Release D+ and hand USB to the peripheral after storage initialization.
+    // Release D+ and hand USB to the peripheral after keymap initialization.
     unsafe {
         // Restore PA12 MODER to input (0b00).
         let moder = 0x48000000 as *mut u32;
@@ -208,7 +193,7 @@ async fn main(_spawner: Spawner) {
 
     let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config);
     join5(
-        run_all!(left_matrix, right_matrix, storage, watchdog_runner),
+        run_all!(left_matrix, right_matrix, watchdog_runner),
         led::layer_indicator(&mut led_bit0, &mut led_bit1, &mut led_bit2, &shared_i2c),
         layout_switch::run(),
         keyboard.run(),
