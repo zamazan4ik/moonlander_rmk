@@ -159,15 +159,6 @@ const RU_LETTER_COMBOS: [(HidKeyCode, HidKeyCode, HidKeyCode); 4] = [
 pub fn get_default_behavior() -> BehaviorConfig {
     let mut behavior_config = BehaviorConfig::default();
 
-    // TD_ESC_EQL: tap = Escape, double-tap = Equal.
-    /*let _ = behavior_config.morse.morses.push(Morse::new_from_vial(
-        Action::Key(KeyCode::Hid(HidKeyCode::Escape)),
-        Action::No,
-        Action::No,
-        Action::Key(KeyCode::Hid(HidKeyCode::Equal)),
-        MorseProfile::const_default(),
-    ));*/
-
     let mut slots = behavior_config.combo.combos.iter_mut();
     let mut add = |a: HidKeyCode, b: HidKeyCode, output: KeyAction, layer: Option<u8>| {
         *slots.next().expect("raise combo_max_num in keyboard.toml") = Some(Combo::new(
