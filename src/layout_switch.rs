@@ -5,10 +5,16 @@
 //! randomly dropped or applied late. Here Caps Lock is held long enough and
 //! given time to settle, with reports sent straight to the USB report channel.
 //!
-//! Each RU symbol key runs a tiny macro, `[TapAction(User(n)), Delay(..)]`
-//! (`symbol_macro`). The `Delay` keeps RMK's key processing paused while this
-//! task types, so keys pressed in the meantime are queued and come out in order,
-//! in the right layout.
+//! Each RU symbol and layout key runs a macro that is just a `Delay`
+//! (`symbol_macro`, `toggle_macro`). This task recognises the macro by its
+//! `TriggerMacro` action event and does the typing; the `Delay` keeps RMK's key
+//! processing paused meanwhile, so keys pressed in the meantime are queued and
+//! come out in order, in the right layout.
+//!
+//! Macros can't run actions without RMK's `vial` feature, so a layout key
+//! switches the keymap layer by injecting a press of an unwired matrix cell
+//! (`layer_cell`) holding `LayerToggleOnly`. It is queued behind the macro and
+//! ahead of keys pressed during the switch, so they land on the new layer.
 //!
 //! The symbol key is held in EN for as long as the physical keys are held, so
 //! the host's own key repeat works as on the EN layer. The hold ends on any
@@ -19,12 +25,14 @@ use rmk::channel::USB_REPORT_CHANNEL;
 use rmk::embassy_futures::select::{Either, select};
 use rmk::event::{
     ActionEvent, EventSubscriber, KeyboardEvent, KeyboardEventPos, SubscribableEvent,
+    publish_event_async,
 };
 use rmk::hid::{KeyboardReport, Report};
 use rmk::keyboard_macros::MacroOperation;
-use rmk::types::action::Action;
+use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::HidKeyCode;
 
+use crate::behavior::{EN_LAYER, Macro, RU_LAYER};
 use crate::keymap::{COL, ROW};
 
 /// How long Caps Lock is held. QMK uses 80 ms for macOS for the same reason.
@@ -48,15 +56,24 @@ const TOGGLE_DELAY_MS: u16 = (SWITCH_MS + MARGIN_MS) as u16;
 /// release, switch back.
 const SYMBOL_DELAY_MS: u16 = (2 * SWITCH_MS + 3 * KEY_STEP_MS + ROLLOVER_MS + MARGIN_MS) as u16;
 
-/// User action that only toggles the host layout. User 0 is the DFU key.
-const USER_TOGGLE: u8 = 1;
-/// User action of the first `EnSymbol`; the rest follow in order.
-const USER_FIRST_SYMBOL: u8 = 2;
+/// Row of the unwired cells that switch the keymap layer: the left thumb row
+/// has switches only in columns 0-3.
+pub const LAYER_CELL_ROW: u8 = 5;
+
+/// Column of the unwired cell switching the keymap to `layer` (EN or RU).
+pub const fn layer_cell_col(layer: u8) -> u8 {
+    assert!(layer == EN_LAYER || layer == RU_LAYER);
+    5 + layer
+}
+
+/// Keymap action of the cell at `layer_cell_col(layer)`, on every layer.
+pub const fn layer_cell(layer: u8) -> KeyAction {
+    KeyAction::Single(Action::LayerToggleOnly(layer))
+}
 
 /// Symbols missing in ЙЦУКЕН, typed through the EN layout.
 ///
-/// The variant order is the order of the User actions and of the symbol
-/// macros (see `behavior::Macro`). Append new symbols at the end and bump
+/// The variant order is the order of the symbol macros (see `behavior::Macro`). Append new symbols at the end and bump
 /// `LAYOUT_TAG`, so stored macros match the new defaults.
 #[derive(Clone, Copy)]
 pub enum EnSymbol {
@@ -109,19 +126,9 @@ impl EnSymbol {
             Self::Pipe => (HidKeyCode::NonusBackslash, true),
         }
     }
-
-    const fn user(self) -> u8 {
-        USER_FIRST_SYMBOL + self as u8
-    }
-
-    fn from_user(user: u8) -> Option<Self> {
-        Self::ALL
-            .get(user.checked_sub(USER_FIRST_SYMBOL)? as usize)
-            .copied()
-    }
 }
 
-// `from_user` indexes ALL by variant number.
+// `behavior::Macro::from_index` indexes ALL by variant number.
 const _: () = {
     let mut i = 0;
     while i < EnSymbol::ALL.len() {
@@ -133,22 +140,16 @@ const _: () = {
     }
 };
 
-/// Macro typing `symbol` on the RU layer. The `Delay` keeps RMK's key
-/// processing paused while this task types, so later keys stay in order.
-pub const fn symbol_macro(symbol: EnSymbol) -> [MacroOperation; 2] {
-    [
-        MacroOperation::TapAction(Action::User(symbol.user())),
-        MacroOperation::Delay(SYMBOL_DELAY_MS),
-    ]
+/// Macro of an RU symbol key. The `Delay` keeps RMK's key processing paused
+/// while this task types, so later keys stay in order.
+pub const fn symbol_macro() -> [MacroOperation; 1] {
+    [MacroOperation::Delay(SYMBOL_DELAY_MS)]
 }
 
-/// Macro toggling the host layout and switching the keymap to `layer`.
-pub const fn toggle_macro(layer: u8) -> [MacroOperation; 3] {
-    [
-        MacroOperation::TapAction(Action::User(USER_TOGGLE)),
-        MacroOperation::Delay(TOGGLE_DELAY_MS),
-        MacroOperation::TapAction(Action::LayerToggleOnly(layer)),
-    ]
+/// Macro of a layout key. The `Delay` keeps RMK's key processing paused while
+/// this task switches the host layout.
+pub const fn toggle_macro() -> [MacroOperation; 1] {
+    [MacroOperation::Delay(TOGGLE_DELAY_MS)]
 }
 
 const LSHIFT_BIT: u8 = 0x02;
@@ -229,6 +230,17 @@ impl Switcher {
         self.wait_ms(LAYOUT_SETTLE_MS).await;
     }
 
+    /// Switch the keymap to `layer` and toggle the host layout.
+    async fn toggle(&mut self, layer: u8) {
+        // Published before the switch, so the keymap switches right after the
+        // macro, ahead of keys pressed meanwhile. Our own subscriber sees the
+        // press and release; they cancel out in `pressed`.
+        let col = layer_cell_col(layer);
+        publish_event_async(KeyboardEvent::key(LAYER_CELL_ROW, col, true)).await;
+        publish_event_async(KeyboardEvent::key(LAYER_CELL_ROW, col, false)).await;
+        self.switch_layout().await;
+    }
+
     /// Type an EN symbol, held for as long as the physical keys are held.
     async fn type_symbol(&mut self, trigger: &KeyboardEvent, symbol: EnSymbol) {
         // A trigger already released by now was a tap.
@@ -260,17 +272,20 @@ impl Switcher {
                 }
                 Either::Second(event) => event,
             };
-            let Action::User(user) = event.action else {
+            let Action::TriggerMacro(index) = event.action else {
                 continue;
             };
             // RMK publishes ActionEvent on both press and release; act on press.
             if !event.keyboard_event.pressed {
                 continue;
             }
-            if user == USER_TOGGLE {
-                self.switch_layout().await;
-            } else if let Some(symbol) = EnSymbol::from_user(user) {
-                self.type_symbol(&event.keyboard_event, symbol).await;
+            match Macro::from_index(index) {
+                Some(Macro::LayoutRu) => self.toggle(RU_LAYER).await,
+                Some(Macro::LayoutEn) => self.toggle(EN_LAYER).await,
+                Some(Macro::Symbol(symbol)) => {
+                    self.type_symbol(&event.keyboard_event, symbol).await
+                }
+                _ => {}
             }
         }
     }

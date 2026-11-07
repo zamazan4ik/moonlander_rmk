@@ -4,3 +4,7 @@ subs = 2
 
 [rmk]
 combo_max_num = 32
+
+[host]
+vial_enabled = false
+rynk_enabled = false

@@ -11,7 +11,6 @@ mod layout_switch;
 mod led;
 mod mcp23018;
 mod storage_layout;
-mod vial;
 
 use core::ptr;
 
@@ -30,18 +29,16 @@ use embassy_time::Timer;
 use keymap::{COL, ROW};
 use mcp23018::{Mcp23018Matrix, SharedI2c};
 use panic_halt as _;
-use rmk::config::{DeviceConfig, PositionalConfig, RmkConfig, VialConfig};
+use rmk::config::{DeviceConfig, PositionalConfig, RmkConfig};
 use rmk::core_traits::Runnable;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join5;
-use rmk::host::HostService;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::storage::async_flash_wrapper;
 use rmk::usb::UsbTransport;
 use rmk::watchdog::{WatchdogFeed, WatchdogRunner};
 use rmk::{KeymapData, initialize_keymap_and_storage, run_all};
-use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 const IWDG_KR: *mut u32 = 0x4000_3000 as *mut u32;
 const IWDG_PR: *mut u32 = 0x4000_3004 as *mut u32;
@@ -161,9 +158,7 @@ async fn main(_spawner: Spawner) {
             vid: 0x3297,
             pid: 0x1969,
             serial_number: "vial:f64c2b3c;rmk:0.9.0;moonlander:reva",
-            ..Default::default()
         },
-        vial_config: VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[]),
         ..Default::default()
     };
 
@@ -193,7 +188,6 @@ async fn main(_spawner: Spawner) {
     let mut right_matrix = Mcp23018Matrix::new(&shared_i2c, right_debouncer);
 
     let mut keyboard = Keyboard::new(&keymap);
-    let host_service = HostService::new(&keymap, &rmk_config);
 
     // Release D+ and hand USB to the peripheral after storage initialization.
     unsafe {
@@ -212,8 +206,7 @@ async fn main(_spawner: Spawner) {
     iwdg_start();
     let mut watchdog_runner = WatchdogRunner::new(Stm32Iwdg, embassy_time::Duration::from_secs(5));
 
-    let mut usb_transport =
-        UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
+    let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config);
     join5(
         run_all!(left_matrix, right_matrix, storage, watchdog_runner),
         led::layer_indicator(&mut led_bit0, &mut led_bit1, &mut led_bit2, &shared_i2c),

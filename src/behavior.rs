@@ -38,6 +38,15 @@ impl Macro {
         }
     }
 
+    /// The macro at `index` in the macro table.
+    pub(crate) fn from_index(index: u8) -> Option<Self> {
+        let index = index as usize;
+        match index.checked_sub(Self::FIXED.len()) {
+            None => Some(Self::FIXED[index]),
+            Some(i) => EnSymbol::ALL.get(i).copied().map(Self::Symbol),
+        }
+    }
+
     /// Keymap action that runs this macro.
     pub(crate) const fn key(self) -> KeyAction {
         KeyAction::Single(Action::TriggerMacro(self.index()))
@@ -56,9 +65,8 @@ impl Macro {
                 MacroOperation::Tap(HidKeyCode::V),
                 MacroOperation::Release(HidKeyCode::LGui),
             ],
-            Self::LayoutRu => &const { layout_switch::toggle_macro(RU_LAYER) },
-            Self::LayoutEn => &const { layout_switch::toggle_macro(EN_LAYER) },
-            Self::Symbol(symbol) => &layout_switch::symbol_macro(symbol),
+            Self::LayoutRu | Self::LayoutEn => &const { layout_switch::toggle_macro() },
+            Self::Symbol(_) => &const { layout_switch::symbol_macro() },
         };
         Vec::from_slice(ops).expect("too many elements")
     }
@@ -89,8 +97,8 @@ const fn shifted(code: HidKeyCode) -> KeyAction {
     KeyAction::Single(Action::KeyWithModifier(code, ModifierCombination::LSHIFT))
 }
 
-const EN_LAYER: u8 = 0;
-const RU_LAYER: u8 = 1;
+pub(crate) const EN_LAYER: u8 = 0;
+pub(crate) const RU_LAYER: u8 = 1;
 
 /// Number + top-row letter -> the shifted number. Symbols missing in ЙЦУКЕН
 /// get an EN-only combo plus an RU one typed through the EN layout; the rest

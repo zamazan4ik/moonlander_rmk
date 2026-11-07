@@ -4,8 +4,8 @@ use rmk::types::keycode::HidKeyCode;
 use rmk::types::modifier::ModifierCombination;
 use rmk::{a, k, layer, light, mo, mt, shifted, user, wm};
 
-use crate::behavior::{Macro, via_en};
-use crate::layout_switch::EnSymbol;
+use crate::behavior::{EN_LAYER, Macro, RU_LAYER, via_en};
+use crate::layout_switch::{self, EnSymbol};
 
 /// Index into behavior_config.morse.morses.
 pub const _TD_ESC_EQL: u8 = 0;
@@ -19,6 +19,16 @@ const RU_SLASH_RALT: KeyAction = KeyAction::TapHold(
     Action::KeyWithModifier(HidKeyCode::Backslash, ModifierCombination::LSHIFT),
     Action::Modifier(ModifierCombination::RALT),
     u8::MAX,
+);
+
+/// Unwired cells (5,5) / (5,6), pressed by `layout_switch` to switch the
+/// keymap to EN / RU after a layout key.
+const TO_EN: KeyAction = layout_switch::layer_cell(EN_LAYER);
+const TO_RU: KeyAction = layout_switch::layer_cell(RU_LAYER);
+const _: () = assert!(
+    layout_switch::LAYER_CELL_ROW == 5
+        && layout_switch::layer_cell_col(EN_LAYER) == 5
+        && layout_switch::layer_cell_col(RU_LAYER) == 6
 );
 
 /// Rows 0-4 / 6-10 belong to the left / right hand.
@@ -49,7 +59,7 @@ pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
             [k!(Quote), k!(Z), k!(X), k!(C), k!(V), k!(B), a!(No)],
             [shifted!(NonusBackslash), a!(No), a!(No), a!(No), mo!(2), a!(No), a!(No)],
             // Three narrow thumbs, then the large red key.
-            [k!(LShift), k!(Backspace), k!(Enter), k!(LCtrl), a!(No), a!(No), a!(No)],
+            [k!(LShift), k!(Backspace), k!(Enter), k!(LCtrl), a!(No), TO_EN, TO_RU],
 
             // Right half
             [k!(Equal), k!(Kc6), k!(Kc7), k!(Kc8), k!(Kc9), k!(Kc0), k!(Equal)],
@@ -71,7 +81,7 @@ pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
             [via_en(EnSymbol::Quote), k!(Z), k!(X), k!(C), k!(V), k!(B), a!(No)],
             [via_en(EnSymbol::Pipe), a!(No), a!(No), a!(No), mo!(4), a!(No), a!(No)],
             // Three narrow thumbs, then the large red key.
-            [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), a!(No), a!(No)],
+            [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), TO_EN, TO_RU],
 
             // Right half
             [k!(Equal), k!(Kc6), k!(Kc7), k!(Kc8), k!(Kc9), k!(Kc0), k!(Equal)],
@@ -91,7 +101,7 @@ pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
             [a!(Transparent), a!(Transparent), k!(LeftBracket), k!(RightBracket), shifted!(LeftBracket), shifted!(RightBracket), a!(No)],
             [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), a!(No)],
             // Three narrow thumbs, then the large red key.
-            [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), a!(No), a!(No)],
+            [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), TO_EN, TO_RU],
 
             // Right half
             [a!(Transparent), k!(F6), k!(F7), k!(F8), k!(F9), k!(F10), k!(F11)],
@@ -111,7 +121,7 @@ pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
             [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No)],
             [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), a!(No)],
             // Three narrow thumbs, then the large red key.
-            [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), a!(No), a!(No)],
+            [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), TO_EN, TO_RU],
 
             // Right half
             [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), user!(0)],
@@ -131,7 +141,7 @@ pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
             [a!(Transparent), a!(Transparent), via_en(EnSymbol::LeftBracket), via_en(EnSymbol::RightBracket), via_en(EnSymbol::LeftBrace), via_en(EnSymbol::RightBrace), a!(No)],
             [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), a!(No)],
             // Three narrow thumbs, then the large red key.
-            [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), a!(No), a!(No)],
+            [a!(Transparent), a!(Transparent), a!(Transparent), a!(Transparent), a!(No), TO_EN, TO_RU],
 
             // Right half
             [a!(Transparent), k!(F6), k!(F7), k!(F8), k!(F9), k!(F10), k!(F11)],
